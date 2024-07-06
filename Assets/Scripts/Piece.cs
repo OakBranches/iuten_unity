@@ -1,51 +1,92 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using static UnityEngine.UI.Image;
 
 
 
-
-public class Piece
+public class MoveRules : MonoBehaviour
 {
-    static int[] tower1 = {0, 0};
-    static int[] tower2 = {0, 0};
+    public int[,] table = new int[9, 11]
+    {
+        {6, 2, 0, 0, 0, 0, 0, 0, 0, 7, 11},
+        {6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11},
+        {3, 4, 0, 0, 0, 0, 0, 0, 0, 9, 8},
+        {6, 6, 0, 0, 0, 0, 0, 0, 0, 11, 11},
+        {0, 5, 0, 0, 0, 0, 0, 0, 0, 10, 0},
+        {6, 6, 0, 0, 0, 0, 0, 0, 0, 11, 11},
+        {3, 4, 0, 0, 0, 0, 0, 0, 0, 9, 8},
+        {6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11},
+        {6, 2, 0, 0, 0, 0, 0, 0, 0, 7, 11}
+    };
 
-    static List<List<Move>> filterOutBoundsAndOccuped(int[,] t, Move[,] moves)
+    public InternalState state = new InternalState();
+
+
+    public void movePiece(Move move)
+    {
+        movePiece(move, table, state);
+    }
+
+    public static void movePiece(Move move, int[,] t, InternalState state)
+    {
+        t[move.x2, move.y2] = t[move.x, move.y];
+        t[move.x, move.y] = 0;
+        state.nextPlayer();
+    }
+
+
+    static int[] tower1 = { 4, 3 };
+    static int[] tower2 = { 4, 7 };
+
+    static List<List<Move>> filterOutBoundsAndOccupied(int[,] t, List<List<Move>> moves)
     {
         List<List<Move>> validMoves = new List<List<Move>>();
-        for (int i = 0; i < moves.GetLength(0); i++)
+        for (int i = 0; i < moves.Count; i++)
         {
             List<Move> validMoveSequence = new List<Move>();
-            for (int j = 0; j < moves.GetLength(1); j++)
+            for (int j = 0; j < moves[i].Count; j++)
             {
-                bool add;
-                if (moves[i, j].x2 >= 0 && moves[i, j].x2 < 9 && moves[i, j].y2 >= 0 && moves[i, j].y2 < 11)
+                // 1 continua, 0 para antes dessa casa, 2 para nessa casa
+                int add;
+                if (moves[i][j].x2 >= 0 && moves[i][j].x2 < 9 && moves[i][j].y2 >= 0 && moves[i][j].y2 < 11)
                 {
-                    add = true;
+                    add = 1;
                 }
-                else if (getPlayer(moves[i,j].piece) == getPlayer((PieceType)t[moves[i,j].x2, moves[i, j].y2])){
-                    add = false;
+                else if (getPlayer(moves[i][j].piece) == getPlayer((PieceType)t[moves[i][j].x2, moves[i][j].y2]))
+                {
+                    add = 0;
+
+                // encontrou inimigo
+                } else if (getPlayer((PieceType)t[moves[i][j].x2, moves[i][j].y2]) != null)
+                {
+                    add = 2;
+                    // para no inimigo
+                    // todo considerar caso de tiro no elefante
+                } else if (moves[i][j].x2==tower1[0] && moves[i][j].y2 == tower1[1] ||
+                    moves[i][j].x2 == tower2[0] && moves[i][j].y2 == tower2[1])
+                {
+                    //corta movimento quando bate na torre
+                    add = 2;
                 }
                 else
                 {
-                    add = false;
+                    add = 0;
                 }
 
-                if (add)
+                if (add != 0)
                 {
-                    validMoveSequence.Add(moves[i, j]);
-                } else
+                    validMoveSequence.Add(moves[i][j]);
+                }
+
+                if (add != 1)
                 {
                     break;
                 }
 
             }
-            if (validMoveSequence.Count > 0)
-            {
-                validMoves.Add(validMoveSequence);
-            }
+            validMoves.Add(validMoveSequence);
         }
-
         return validMoves;
     }
 
@@ -65,29 +106,57 @@ public class Piece
 
     static List<List<Move>> getMoves(int[,] t, int x, int y)
     {
-        return filterOutBoundsAndOccuped(t, getRawMoves(t, x, y));
+        return filterOutBoundsAndOccupied(t, getRawMoves(t, x, y));
+    }
+
+
+    static List<List<BaseMove>> laserBeam(int x, int y, int ox, int oy, int t)
+    {   
+        List<BaseMove> moves = new List<BaseMove>();
+        for (int i=1; i<=t; i++)
+        {
+            moves.Add(new BaseMove(x, y, x + i*ox, y + i*oy));
+        }
+        return new List<List<BaseMove>>{moves};
     }
 
 
 
-
-    static Move[,] getRawMoves(int[,] t, int x, int y)
+    static List<List<Move>> getRawMoves(int[,] t, int x, int y)
     {
-        Move[] moves = new Move[0];
         bool specialMove = false;
-        BaseMove[,] baseMoves ={
-                {new BaseMove(x,y, x+1,y)},
-                {new BaseMove(x,y, x-1,y)},
-                {new BaseMove(x,y, x,y+1)},
-                {new BaseMove(x,y, x,y-1)},
-                {new BaseMove(x,y, x-1,y-1)},
-                {new BaseMove(x,y, x+1,y+1)}
-            };
+
+
+        List<List<BaseMove>> elephant1Moves = new List<List<BaseMove>>
+        {
+            new List<BaseMove> { new BaseMove(x, y, x, y + 1) },
+            new List<BaseMove> { new BaseMove(x, y, x + 1, y + 1) },
+            new List<BaseMove> { new BaseMove(x, y, x - 1, y + 1) },
+        };
+
+        List<List<BaseMove>> elephant2Moves = new List<List<BaseMove>>
+        {
+            new List<BaseMove> { new BaseMove(x, y, x, y - 1) },
+            new List<BaseMove> { new BaseMove(x, y, x - 1, y - 1) },
+            new List<BaseMove> { new BaseMove(x, y, x + 1, y - 1) },
+        };  
+
+        List<List<BaseMove>> lateralMoves = new List<List<BaseMove>>
+        {
+            new List<BaseMove> { new BaseMove(x, y, x + 1, y) },
+            new List<BaseMove> { new BaseMove(x, y, x - 1, y) },
+        };
+
+        List<List<BaseMove>> baseMoves = new List<List<BaseMove>>();
+        baseMoves.AddRange(elephant1Moves);
+        baseMoves.AddRange(elephant2Moves);
+        baseMoves.AddRange(lateralMoves);
+
 
         // Se não for peça
         if (t[x, y] < 2)
         {
-            return new Move[0,0];
+            return new List<List<Move>>();
         }
 
         // Se estiver na torre
@@ -102,31 +171,76 @@ public class Piece
             }
 
         }
- 
+        List<List<Move>> moves = new List<List<Move>>();
 
         switch ((PieceType)t[x, y])
         {
             case PieceType.DRUID1:
             case PieceType.DRUID2:
-                return new Move[0,0];
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, 1, 0, 2)));
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, -1, 0, 2)));
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, 0, 1, 2)));
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, 0, -1, 2)));
+                return moves;
             case PieceType.KNIGHT1:
             case PieceType.KNIGHT2:
-                return new Move[0,0];
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, 1, 0, 10)));
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, -1, 0, 10)));
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, 0, 1, 8)));
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, 0, -1, 8)));
+                return moves;
             case PieceType.ARCHER1:
             case PieceType.ARCHER2:
-                return new Move[0,0];
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], lateralMoves));
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, 1, 1, 2)));
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, -1, -1, 2)));
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, -1, 1, 2)));
+                moves.AddRange(BaseMove.toMoves((PieceType)t[x, y], laserBeam(x, y, 1, -1, 2)));
+                return moves;
             case PieceType.ELEPHANT1:
-
+                return BaseMove.toMoves((PieceType)t[x, y], elephant1Moves);
             case PieceType.ELEPHANT2:
-                
-                return new Move[0,0];
+                return BaseMove.toMoves((PieceType)t[x, y], elephant2Moves);
             case PieceType.PRINCE1:
             case PieceType.PRINCE2:
                 return BaseMove.toMoves((PieceType)t[x, y], baseMoves);
             default:
-                return new Move[0,0];
+                return moves;
         }
 
+    }
+}
+
+
+public struct InternalState
+{
+    public int elephant1Buffer;
+    public int elephant2Buffer;
+    public int knightEspecial;
+    public Player currentPlayer;
+
+    public InternalState(int elephant1Buffer = 0, int elephant2Buffer = 0, int knightEspecial = 0, Player currentPlayer = Player.PLAYER1)
+    {
+        this.elephant1Buffer = elephant1Buffer;
+        this.elephant2Buffer = elephant2Buffer;
+        this.knightEspecial = knightEspecial;
+        this.currentPlayer = currentPlayer;
+    }
+
+    public void nextPlayer()
+    {
+        if (knightEspecial == 2)
+        {
+            knightEspecial = 1;
+            return;
+        }
+        if (currentPlayer == Player.PLAYER1)
+        {
+            currentPlayer = Player.PLAYER2;
+        } else
+        {
+            currentPlayer = Player.PLAYER1;
+        }
     }
 }
 
@@ -152,18 +266,20 @@ public struct BaseMove
         return new Move(this, piece);
     }
 
-    public static Move[,] toMoves(PieceType piece, BaseMove[,]  moves)
+    public static List<List<Move>> toMoves(PieceType piece, List<List<BaseMove>>  moves)
     {
-        Move[,] newMoves = new Move[moves.GetLength(0), moves.GetLength(1)];
-        for (int i = 0; i < moves.GetLength(0); i++)
+        List<List<Move>> newMoves = new List<List<Move>>();
+
+        for (int i = 0; i < moves.Count; i++)
         {
-            for (int j = 0; j < moves.GetLength(1); j++)
+            for (int j = 0; j < moves[i].Count; j++)
             {
-                newMoves[i, j] = moves[i, j].toMove(piece);
+                newMoves[i][j] = moves[i][j].toMove(piece);
             }
         }
         return newMoves;
     }
+
 
 }
 
@@ -198,17 +314,17 @@ public struct Move
 
 public enum PieceType
 {
-    OUTOFBOUNDS,
     NONE,
+    OUTOFBOUNDS,
     ARCHER1,
     DRUID1,
-    KNIGHT1,
     ELEPHANT1,
+    KNIGHT1,
     PRINCE1,
     ARCHER2,
     DRUID2,
-    KNIGHT2,
     ELEPHANT2,
+    KNIGHT2,
     PRINCE2
 }
 
@@ -217,10 +333,3 @@ public enum Player
     PLAYER1,
     PLAYER2
 }
-public class Table
-{
-
-}
-
-
-
