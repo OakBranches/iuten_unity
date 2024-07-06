@@ -1,37 +1,28 @@
+using JetBrains.Annotations;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using static UnityEngine.UI.Image;
 
 
 
 public class MoveRules : MonoBehaviour
 {
-    public int[,] table = new int[9, 11]
-    {
-        {6, 2, 0, 0, 0, 0, 0, 0, 0, 7, 11},
-        {6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11},
-        {3, 4, 0, 0, 0, 0, 0, 0, 0, 9, 8},
-        {6, 6, 0, 0, 0, 0, 0, 0, 0, 11, 11},
-        {0, 5, 0, 0, 0, 0, 0, 0, 0, 10, 0},
-        {6, 6, 0, 0, 0, 0, 0, 0, 0, 11, 11},
-        {3, 4, 0, 0, 0, 0, 0, 0, 0, 9, 8},
-        {6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11},
-        {6, 2, 0, 0, 0, 0, 0, 0, 0, 7, 11}
-    };
-
-    public InternalState state = new InternalState();
-
+    public InternalState state = new InternalState(InternalState.initialTable);
 
     public void movePiece(Move move)
     {
-        movePiece(move, table, state);
+        movePiece(move, state);
     }
 
-    public static void movePiece(Move move, int[,] t, InternalState state)
+    public static void movePiece(Move move, InternalState state)
     {
-        t[move.x2, move.y2] = t[move.x, move.y];
-        t[move.x, move.y] = 0;
+        if (getPlayer(move.piece) != state.currentPlayer)
+        {
+            return;
+        }
+
+        state.table[move.x2, move.y2] = state.table[move.x, move.y];
+        state.table[move.x, move.y] = 0;
         state.nextPlayer();
     }
 
@@ -39,8 +30,9 @@ public class MoveRules : MonoBehaviour
     static int[] tower1 = { 4, 3 };
     static int[] tower2 = { 4, 7 };
 
-    static List<List<Move>> filterOutBoundsAndOccupied(int[,] t, List<List<Move>> moves)
+    static List<List<Move>> filterOutBoundsAndOccupied(InternalState state, List<List<Move>> moves)
     {
+        int[,] t = state.table;
         List<List<Move>> validMoves = new List<List<Move>>();
         for (int i = 0; i < moves.Count; i++)
         {
@@ -104,9 +96,9 @@ public class MoveRules : MonoBehaviour
         }
     }
 
-    static List<List<Move>> getMoves(int[,] t, int x, int y)
+    static List<List<Move>> getMoves(InternalState state, int x, int y)
     {
-        return filterOutBoundsAndOccupied(t, getRawMoves(t, x, y));
+        return filterOutBoundsAndOccupied(state, getRawMoves(state.table, x, y));
     }
 
 
@@ -212,19 +204,58 @@ public class MoveRules : MonoBehaviour
 }
 
 
-public struct InternalState
+public class InternalState
 {
     public int elephant1Buffer;
     public int elephant2Buffer;
     public int knightEspecial;
     public Player currentPlayer;
+    public Player? winner;
+    public Move? lastMove;
+    public static int[,] initialTable = new int[9, 11]
+    {
+        { 6, 2, 0, 0, 0, 0, 0, 0, 0, 7, 11},
+        { 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11},
+        { 3, 4, 0, 0, 0, 0, 0, 0, 0, 9, 8},
+        { 6, 6, 0, 0, 0, 0, 0, 0, 0, 11, 11},
+        { 0, 5, 0, 0, 0, 0, 0, 0, 0, 10, 0},
+        { 6, 6, 0, 0, 0, 0, 0, 0, 0, 11, 11},
+        { 3, 4, 0, 0, 0, 0, 0, 0, 0, 9, 8},
+        { 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11},
+        { 6, 2, 0, 0, 0, 0, 0, 0, 0, 7, 11}
+    };
 
-    public InternalState(int elephant1Buffer = 0, int elephant2Buffer = 0, int knightEspecial = 0, Player currentPlayer = Player.PLAYER1)
+    public InternalState(
+        int[,] table,
+        int elephant1Buffer = 0,
+        int elephant2Buffer = 0,
+        int knightEspecial = 0,
+        Player currentPlayer = Player.PLAYER1,
+        Player? winner = null)
     {
         this.elephant1Buffer = elephant1Buffer;
         this.elephant2Buffer = elephant2Buffer;
         this.knightEspecial = knightEspecial;
         this.currentPlayer = currentPlayer;
+        this.winner = winner;
+        this.table = table;
+    }
+    public int[,] table;
+
+    public void reset()
+    {
+        setTable(initialTable);
+        currentPlayer = Player.PLAYER1;
+        winner = null;
+        elephant1Buffer = 0;
+        elephant2Buffer = 0;
+        knightEspecial = 0;
+
+    }
+
+    public void setTable(int[,] table)
+    {
+        this.table = table;
     }
 
     public void nextPlayer()
